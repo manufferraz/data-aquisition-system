@@ -22,65 +22,57 @@ public:
   }
 
 private:
-  void read_message()
-  {
-    auto self(shared_from_this());
-    boost::asio::async_read_until(socket_, buffer_, "\r\n",
-        [this, self](boost::system::error_code ec, std::size_t length)
-        {
-          if (!ec)
-          {
-            std::istream is(&buffer_);
-            std::string message(std::istreambuf_iterator<char>(is), {});
-            std::cout << "Received: " << message << std::endl;
-            
-            //conversão de message para char
-            char msg[message.length() + 1];
-            std::strcpy(msg, message.c_str());
+void read_message()
+    {
+        auto self(shared_from_this());
+        boost::asio::async_read_until(socket_, buffer_, "\r\n",
+            [this, self](boost::system::error_code ec, std::size_t length)
+            {
+                if (!ec)
+                {
+                    std::istream is(&buffer_);
+                    std::string message((std::istreambuf_iterator<char>(is)), {});
+                    std::cout << "Received: " << message << std::endl;
 
-            // Processa a mensagem e cria um array de elementos
-            char *aux[1027];
-            int numTokens = 0;
+                    // Processa a mensagem e cria um array de elementos
+                    char *aux[1027];
+                    int numTokens = 0;
 
-            char temp[1027];
-            strcpy(temp, msg); 
-            char *token = strtok(temp, "|");
-            while (token != NULL) {
-                aux[numTokens++] = token;
-                token = strtok(NULL, " ");
-            }
+                    char temp[1027];
+                    std::strcpy(temp, message.c_str());
+                    char *token = std::strtok(temp, "|");
+                    while (token != nullptr) {
+                        aux[numTokens++] = token;
+                        token = std::strtok(nullptr, "|");
+                    }
 
-            // Verifica o conteúdo da mensagem recebida 
-            if (numTokens > 0 && strcmp(aux[0], "LOG") == 0) {                
-              int sensorId, data_hora, leitura;
+                    // Verifica o conteúdo da mensagem recebida
+                    if (numTokens > 0 && std::strcmp(aux[0], "LOG") == 0) {
+                        char sensor_id[20];
+                        char data_hora[20];
+                        char leitura[10];
+                        std::cout << "Teste: " << aux[0] << std::endl;
 
-              for (int i = 1; i < numTokens; i++) {
-                  if (i == 1) {
-                      sscanf(aux[i], "%d", &sensorId);
-                  } else if (i == 2) {
-                      sscanf(aux[i], "%d", &data_hora);
-                  } else if (i == 3) {
-                      sscanf(aux[i], "%d", &leitura);
-                  } 
-              }
-              char *resposta =  save_sensor(sensorId, data_hora, leitura);
-              write_message(resposta);
+                        if (numTokens >= 4) {
+                            std::strcpy(sensor_id, aux[1]);
+                            std::strcpy(data_hora, aux[2]);
+                            std::strcpy(leitura, aux[3]);
+                        }
 
-            } else if (numTokens > 0 && strcmp(aux[0], "GET") == 0) {                
-              int sensorId;
+                        std::string resposta = save_sensor(sensor_id, data_hora, leitura);
+                        write_message(resposta);
+                    } else if (numTokens > 0 && std::strcmp(aux[0], "GET") == 0) {
+                        int n_registros = 0;
+                        std::cout << "Teste: " << aux[0] << std::endl;
 
-              for (int i = 1; i < numTokens; i++) {
-                  if (i == 1) {
-                    sscanf(aux[i], "%d", &sensorId);
-                  }
-                  else if(i == 2) {
-                    sscanf(aux[i], "%d", &n_registros);
-                  }
-              }
-              char *resposta =  send_data(sensorId, n_registros); //cliente manda mensagem, servidor pega as últimas medições e manda para o cliente
-              write_message(resposta);
-            }
-          } 
+                        if (numTokens >= 3) {
+                            n_registros = std::stoi(aux[2]);
+                        }
+
+                        std::string resposta = send_data(n_registros);
+                        write_message(resposta);
+                    }
+                }
         });
   }
         
@@ -100,73 +92,89 @@ private:
 
   struct record_t
   {
-    int  sensor_id;
-    //[30];
+    char sensor_id[30];
     char data_hora[30];
     char leitura[30]; 
   };
 
-  // void save_sensor(char sensor_id, chat data_hora, char leitura)
-  // {
-  //   // Abre o arquivo para leitura e escrita em modo binário e coloca o apontador do arquivo
-  //   // apontando para o fim de arquivo
-  //   std::fstream file("sensor.dat", std::fstream::out | std::fstream::in | std::fstream::binary 
-  //                                   | std::fstream::app); 
-  //   // Caso não ocorram erros na abertura do arquivo
-  //   if (file.is_open())
-  //   {
-  //     // Imprime a posição atual do apontador do arquivo (representa o tamanho do arquivo)
-  //     int file_size = file.tellg();
+  std::string save_sensor(const char* sensor_id, const char* data_hora, const char* leitura)
+    {
+        // Abre o arquivo para leitura e escrita em modo binário e coloca o apontador do arquivo
+        // apontando para o fim de arquivo
+        std::fstream file("sensor.dat", std::fstream::out | std::fstream::in | std::fstream::binary | std::fstream::app); 
+        
+        // Caso não ocorram erros na abertura do arquivo
+        if (file.is_open())
+        {
+            // Escreve um novo registro no arquivo
+            record_t rec;
+            std::strncpy(rec.sensor_id, sensor_id, sizeof(rec.sensor_id) - 1);
+            rec.sensor_id[sizeof(rec.sensor_id) - 1] = '\0';
+            std::strncpy(rec.data_hora, data_hora, sizeof(rec.data_hora) - 1);
+            rec.data_hora[sizeof(rec.data_hora) - 1] = '\0';
+            std::strncpy(rec.leitura, leitura, sizeof(rec.leitura) - 1);
+            rec.leitura[sizeof(rec.leitura) - 1] = '\0';
+            file.write(reinterpret_cast<char*>(&rec), sizeof(record_t));
+            
+            // Fecha o arquivo
+            file.close();
 
-  //     // Recupera o número de registros presentes no arquivo
-  //     int n = file_size/sizeof(record_t);
-  //     std::cout << "Num records: " << n << " (file size: " << file_size << " bytes)" << std::endl;
+            return "LOG_SUCCESS\r\n";
+        }
+        else
+        {
+            std::cout << "Error opening file!" << std::endl;
+            return "LOG_FAIL\r\n";
+        }
+    }
 
-  //     // Escreve 10 registros no arquivo
-  //     std::cout << "Writing 10 more records..." << std::endl;
-  //     int id = n+1;
-  //     for (unsigned i =0; i < 10; ++i)
-  //     {
-  //       record_t rec;
-  //       rec.sensor_id = sensor_id;
-  //       // rec.data_hora = data_hora;
-  //       // rec.leitura = leitura;
-  //       file.write((char*)&rec, sizeof(record_t));
-  //     }
+  std::string send_data(int n_registros)
+{
+    // Abre o arquivo para leitura em modo binário
+    std::fstream file("sensor.dat", std::fstream::in | std::fstream::binary);
+    
+    // Caso não ocorram erros na abertura do arquivo
+    if (file.is_open())
+    {
+        // Posiciona o apontador de leitura no final do arquivo para obter o tamanho
+        file.seekg(0, std::ios::end);
+        int file_size = file.tellg();
 
-  //     // Imprime a posição atual do apontador do arquivo (representa o tamanho do arquivo)
-  //     file_size = file.tellg();
-  //     // Recupera o número de registros presentes no arquivo
-  //     n = file_size/sizeof(record_t);
-  //     std::cout << "Num records: " << n << " (file size: " << file_size << " bytes)" << std::endl;
-      
-  //     bool id_ok = false;
-  //     while (!id_ok)
-  //     {
-  //       std::cout << "Id: ";
-  //       std::cin >> id;
-  //       if (id > n)
-  //         std::cout << "Invalid id" << std::endl;
-  //       else
-  //         id_ok = true;
-  //     }
-  //     file.seekp((id-1)*sizeof(record_t), std::ios_base::beg);
+        // Recupera o número de registros presentes no arquivo
+        int n = file_size / sizeof(record_t);
+        std::cout << "Num records: " << n << " (file size: " << file_size << " bytes)" << std::endl;
 
-  //     // Le o registro selecionado
-  //     record_t rec;
-  //     file.read((char*)&rec, sizeof(record_t));
+        // Posiciona o apontador de leitura no início do arquivo
+        file.seekg(0, std::ios::beg);
 
-  //     // Imprime o registro
-  //     std::cout << "Id: "  << rec.sensor_id << " - Name: " << rec.data_hora << " - Phone: "<< rec.leitura << std::endl;
+        // Lê todos os registros do arquivo
+        std::vector<record_t> registros(n);
+        file.read(reinterpret_cast<char*>(registros.data()), n * sizeof(record_t));
 
-  //     // Fecha o arquivo
-  //     file.close();
-  //   }
-  //   else
-  //   {
-  //     std::cout << "Error opening file!" << std::endl;
-  //   }
-   //}
+        // Fecha o arquivo
+        file.close();
+
+        // Monta a resposta
+        std::ostringstream resposta;
+        resposta << n;
+
+        int start = std::max(0, n - n_registros);
+        for (int i = start; i < n; ++i) {
+            resposta << ';' << registros[i].data_hora << '|' << registros[i].leitura;
+        }
+        resposta << "\r\n";
+
+        return resposta.str();
+    }
+    else
+    {
+        std::cout << "Error opening file!" << std::endl;
+        return "Error opening file!\r\n";
+    }
+}
+
+
+
 
   tcp::socket socket_;
   boost::asio::streambuf buffer_;
