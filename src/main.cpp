@@ -51,7 +51,7 @@ void read_message()
                         char sensor_id[20];
                         char data_hora[20];
                         char leitura[10];
-                        std::cout << "Teste: " << aux[0] << std::endl;
+                        std::cout << "Tipo req: " << aux[0] << std::endl;
 
                         if (numTokens >= 4) {
                             std::strcpy(sensor_id, aux[1]);
@@ -61,9 +61,10 @@ void read_message()
 
                         std::string resposta = save_sensor(sensor_id, data_hora, leitura);
                         write_message(resposta);
+
                     } else if (numTokens > 0 && std::strcmp(aux[0], "GET") == 0) {
                         int n_registros = 0;
-                        std::cout << "Teste: " << aux[0] << std::endl;
+                        std::cout << "Tipo req: " << aux[0] << std::endl;
 
                         if (numTokens >= 3) {
                             n_registros = std::stoi(aux[2]);
@@ -128,50 +129,64 @@ void read_message()
         }
     }
 
-  std::string send_data(int n_registros)
-{
-    // Abre o arquivo para leitura em modo binário
-    std::fstream file("sensor.dat", std::fstream::in | std::fstream::binary);
-    
-    // Caso não ocorram erros na abertura do arquivo
-    if (file.is_open())
+std::string send_data(int num_leituras)
     {
-        // Posiciona o apontador de leitura no final do arquivo para obter o tamanho
-        file.seekg(0, std::ios::end);
-        int file_size = file.tellg();
+        // Abre o arquivo para leitura em modo binário
+        std::fstream file("sensor.dat", std::fstream::in | std::fstream::binary);
+        
+        // Caso não ocorram erros na abertura do arquivo
+        if (file.is_open())
+        {
+            // Posiciona o apontador de leitura no final do arquivo para obter o tamanho
+            file.seekg(0, std::ios::end);
+            int file_size = file.tellg();
 
-        // Recupera o número de registros presentes no arquivo
-        int n = file_size / sizeof(record_t);
-        std::cout << "Num records: " << n << " (file size: " << file_size << " bytes)" << std::endl;
+            if (file_size == -1) {
+                std::cout << "Error determining file size!" << std::endl;
+                return "Error determining file size!\r\n";
+            }
 
-        // Posiciona o apontador de leitura no início do arquivo
-        file.seekg(0, std::ios::beg);
+            // Recupera o número de registros presentes no arquivo
+            int n = file_size / sizeof(record_t);
+            std::cout << "Num records: " << n << " (file size: " << file_size << " bytes)" << std::endl;
 
-        // Lê todos os registros do arquivo
-        std::vector<record_t> registros(n);
-        file.read(reinterpret_cast<char*>(registros.data()), n * sizeof(record_t));
+            // Posiciona o apontador de leitura no início do arquivo
+            file.seekg(0, std::ios::beg);
 
-        // Fecha o arquivo
-        file.close();
+            // Lê todos os registros do arquivo
+            std::vector<record_t> registros(n);
+            file.read(reinterpret_cast<char*>(registros.data()), n * sizeof(record_t));
 
-        // Monta a resposta
-        std::ostringstream resposta;
-        resposta << n;
+            // Verifica se a leitura foi bem-sucedida
+            if (!file) {
+                std::cout << "Error reading file!" << std::endl;
+                return "Error reading file!\r\n";
+            }
 
-        int start = std::max(0, n - n_registros);
-        for (int i = start; i < n; ++i) {
-            resposta << ';' << registros[i].data_hora << '|' << registros[i].leitura;
+            // Fecha o arquivo
+            file.close();
+
+            // Determina quantos registros serão retornados
+            int registros_para_retornar = std::min(n, num_leituras);
+
+            // Monta a resposta
+            std::ostringstream resposta;
+            resposta << registros_para_retornar;
+
+            int start = std::max(0, n - num_leituras);
+            for (int i = start; i < n; ++i) {
+                resposta << ';' << registros[i].data_hora << '|' << registros[i].leitura;
+            }
+            resposta << "\r\n";
+
+            return resposta.str();
         }
-        resposta << "\r\n";
-
-        return resposta.str();
+        else
+        {
+            std::cout << "Error opening file!" << std::endl;
+            return "Error opening file!\r\n";
+        }
     }
-    else
-    {
-        std::cout << "Error opening file!" << std::endl;
-        return "Error opening file!\r\n";
-    }
-}
 
 
 
